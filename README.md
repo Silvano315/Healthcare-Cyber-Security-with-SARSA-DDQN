@@ -18,7 +18,7 @@
 
 ## 🌟 Project Overview
 
-This repository is the seventh project of the master's degree in AI Engineering with [Profession AI](https://profession.ai), all the credits for the requests and idea go to this team. 
+This repository is the eighth project of the master's degree in AI Engineering with [Profession AI](https://profession.ai), all the credits for the requests and idea go to this team. 
 
 DeepGuard Inc., a leading healthcare cybersecurity company, is facing an increase in the complexity and sophistication of cyber attacks. The need to protect sensitive patient information and ensure regulatory compliance is critical to maintaining customer trust and data security.
 
