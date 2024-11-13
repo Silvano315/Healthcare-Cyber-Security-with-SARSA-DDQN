@@ -1,4 +1,4 @@
-import gym_isdgame
+import gym_idsgame
 import gymnasium as gym
 import numpy as np
 
@@ -59,7 +59,7 @@ class IdsGameExplorer:
 
         self.env_name = env_name
         self.env = gym.make(env_name)
-        self.initial_obs, _ = self.env.reset()
+        self.initial_obs, _ = self.env.reset(seed=None)
 
     def get_environment_metrics(self) -> EnvironmentMetrics:
         """Extract key metrics about the environment structure.
@@ -110,39 +110,42 @@ class IdsGameExplorer:
         """
         transitions = []
         current_obs = self.initial_obs
+        try:
 
-        for step in range(num_steps):
-            attack_action = self.env.action_space.sample()
-            defence_action = self.env.action_space.sample()
-            action = (attack_action, defence_action)
+            for step in range(num_steps):
+                attack_action = self.env.action_space.sample()
+                defense_action = self.env.action_space.sample()
+                action = (attack_action, defense_action)
 
-            next_obs, reward, terminated, truncated, info = self.env.step(action)
+                next_obs, reward, terminated, truncated, info = self.env.step(action)
 
-            transition_info = {
-                "step" : step + 1,
-                "action" : {
-                    "attack" : attack_action,
-                    "defence" : defence_action
-                },
-                "reward" : reward,
-                "terminated" : terminated,
-                "truncated" : truncated,
-                "info" : info,
-                "observation_change" : np.any(next_obs != current_obs)
-            }
-            transitions.append(transition_info)
+                transition_info = {
+                    "step" : step + 1,
+                    "action" : {
+                        "attack" : attack_action,
+                        "defense" : defense_action
+                    },
+                    "reward" : reward,
+                    "terminated" : terminated,
+                    "truncated" : truncated,
+                    "info" : info,
+                    "observation_change" : np.any(next_obs != current_obs)
+                }
+                transitions.append(transition_info)
 
-            if render:
-                try:
-                    self.env.render()
-                except Exception as e:
-                    print(f"Rendering failed: {e}")
+                if render:
+                    try:
+                        self.env.render()
+                    except Exception as e:
+                        print(f"Rendering failed: {e}")
 
-            if terminated or truncated:
-                current_obs, _ = self.env.reset()
-            else:
-                current_obs = next_obs
-
+                if terminated or truncated:
+                    current_obs, _ = self.env.reset(seed=None)
+                else:
+                    current_obs = next_obs
+        finally:
+            self.env.close()
+        self.env.close()
         return {"transitions": transitions}
 
     def close(self):
@@ -151,35 +154,43 @@ class IdsGameExplorer:
 
 def main():
     """Main function to demonstrate the explorer's capabilities."""
-    explorer = IdsGameExplorer
 
-    try:
-        metrics = explorer.get_environment_metrics()
-        print("\n=== Environment Metrics ===")
-        print(f"Number of nodes: {metrics.num_nodes}")
-        print(f"Number of attack types: {metrics.num_attack_types}")
-        print(f"Maximum value: {metrics.max_value}")
-        print(f"Defense position shape: {metrics.defense_position.shape}")
-        print(f"Attack position shape: {metrics.attack_position.shape}")
+    env_names = ["idsgame-random-attack-v0", "idsgame-maximal-attack-v0"]
+    
+    for env_name in env_names:
+        print(f"\nTesting environment: {env_name}")
+        try:
+            explorer = IdsGameExplorer(env_name)
+            try:
+                metrics = explorer.get_environment_metrics()
+                print("\n=== Environment Metrics ===")
+                print(f"Number of nodes: {metrics.num_nodes}")
+                print(f"Number of attack types: {metrics.num_attack_types}")
+                print(f"Maximum value: {metrics.max_value}")
+                print(f"Defense position shape: {metrics.defense_position.shape}")
+                print(f"Attack position shape: {metrics.attack_position.shape}")
 
-        action_info = explorer.explore_action_space()
-        print("\n=== Action Space Analysis ===")
-        for key, value in action_info.items():
-            print(f"{key}: {value}")
+                action_info = explorer.explore_action_space()
+                print("\n=== Action Space Analysis ===")
+                for key, value in action_info.items():
+                    print(f"{key}: {value}")
 
-        transition_info = explorer.analyze_state_transition(num_steps=3)
-        print("\n=== State Transitions ===")
-        for transition in transition_info["transitions"]:
-            print(f"\nStep {transition['step']}:")
-            print(f"Actions: {transition['action']}")
-            print(f"Reward: {transition['reward']}")
-            print(f"Terminated: {transition['terminated']}")
-            print(f"State changed: {transition['observation_change']}")
-
-    except Exception as e:
-        print(f"An error occurred: {str(e)}")
-    finally:
-        explorer.close()
+                transition_info = explorer.analyze_state_transition(num_steps=3)
+                print("\n=== State Transitions ===")
+                for transition in transition_info["transitions"]:
+                    print(f"\nStep {transition['step']}:")
+                    print(f"Actions: {transition['action']}")
+                    print(f"Reward: {transition['reward']}")
+                    print(f"Terminated: {transition['terminated']}")
+                    print(f"State changed: {transition['observation_change']}")
+            except Exception as e:
+                print(f"An error occurred: {str(e)}")
+            finally:
+                explorer.close()
+        except ValueError as e:
+            print(f"Error with environment {env_name}: {e}")
+        except Exception as e:
+            print(f"Unexpected error with environment {env_name}: {e}")    
 
 if __name__ == "__main__":
     main()
