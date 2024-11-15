@@ -107,3 +107,50 @@ class IdsGameWrapper:
             # Focus on attack reward for training
             return float(attack_reward)
         return float(reward)
+    
+    def get_state_size(self) -> Tuple[int, ...]:
+        """
+        Get the size of the state space.
+        
+        Returns:
+            Tuple representing state dimensions
+        """
+        if isinstance(self.observation_space, tuple):
+            return (self.observation_space[0].shape[0], self.observation_space[1].shape[0])
+        return self.observation_space.shape
+    
+    def get_action_size(self) -> int:
+        """
+        Get the size of the action space.
+        
+        Returns:
+            Number of possible actions
+        """
+        return self.action_space.n if isinstance(self.action_space, spaces.Discrete) else self.action_space.shape[0]
+    
+    def get_environment_parameters(self) -> Dict[str, int]:
+        """
+        Get the environment parameters.
+        
+        Returns:
+            Dictionary containing environment parameters
+        """
+        return self.env_parameters
+    
+    def get_episode_rewards(self) -> list:
+        """
+        Get the list of episode rewards.
+        
+        Returns:
+            List of rewards for each completed episode
+        """
+        return self.episode_rewards
+    
+    def render(self):
+        """Render the environment if configured"""
+        if self.config['environment']['parameters']['render']:
+            return self.env.render()
+    
+    def close(self):
+        """Close the environment"""
+        self.env.close()
