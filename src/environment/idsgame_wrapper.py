@@ -3,10 +3,11 @@ import numpy as np
 from typing import Tuple, Dict, Any, Optional
 from gymnasium import spaces
 
+
 class IdsGameWrapper:
     """
     A wrapper for the IdsGame environment that standardizes the interface
-    and handles preprocessing of states and rewards.
+    and handles preprocessing of states and rewards from a defensive perspective.
     """
     
     def __init__(self, env_name: str, env_point: str, config: Dict[str, Any]):
@@ -26,38 +27,33 @@ class IdsGameWrapper:
         
         self.env = gym.make(env_name)
         self.config = config
-
+        
         self.observation_space = self.env.observation_space
         self.action_space = self.env.action_space
-
+        
         self.env_parameters = {
-            'num_nodes' : self.env.idsgame_config.game_config.num_nodes,
+            'num_nodes': self.env.idsgame_config.game_config.num_nodes,
             'num_attack_types': self.env.idsgame_config.game_config.num_attack_types,
             'max_value': self.env.idsgame_config.game_config.max_value
         }
-
+        
         self.episode_rewards = []
         self.current_episode_reward = 0.0
-
+        self.successful_defenses = 0
+        self.total_attacks = 0
+    
     def reset(self, seed: Optional[int] = None) -> Tuple[np.ndarray, Dict]:
-        """
-        Reset the environment and return processed initial state.
-        
-        Args:
-            seed: Random seed for reproducibility
-            
-        Returns:
-            Processed initial state and info dict
-        """
-        observation, info, = self.env.reset(seed = seed)
+        """Reset the environment and return processed initial state."""
+        observation, info = self.env.reset(seed=seed)
         return self.preprocess_state(observation), info
     
     def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, bool, Dict]:
         """
         Take a step in the environment with preprocessing of state and reward.
+        Focus on defensive performance.
         
         Args:
-            action: Action to take
+            action: Defense action to take
             
         Returns:
             Tuple of (next_state, reward, terminated, truncated, info)
@@ -65,12 +61,22 @@ class IdsGameWrapper:
         next_state, reward, terminated, truncated, info = self.env.step(action)
         processed_state = self.preprocess_state(next_state)
         processed_reward = self.process_reward(reward)
-
+        
         self.current_episode_reward += processed_reward
+        self.total_attacks += 1
+        if processed_reward > 0:  
+            self.successful_defenses += 1
+        
         if terminated or truncated:
             self.episode_rewards.append(self.current_episode_reward)
+            defense_rate = self.successful_defenses / self.total_attacks if self.total_attacks > 0 else 0
+            info['defense_success_rate'] = defense_rate
+            
+            # Reset episode-specific counters
             self.current_episode_reward = 0.0
-
+            self.successful_defenses = 0
+            self.total_attacks = 0
+            
         return processed_state, processed_reward, terminated, truncated, info
     
     def preprocess_state(self, state: np.ndarray) -> np.ndarray:
@@ -94,19 +100,29 @@ class IdsGameWrapper:
     
     def process_reward(self, reward: float) -> float:
         """
-        Process the reward signal.
+        Process the reward signal focusing on defensive performance.
         
         Args:
-            reward: Raw reward from environment
+            reward: Raw reward from environment (attack_reward, defense_reward)
             
         Returns:
-            Processed reward
+            Processed defense reward
         """
         if isinstance(reward, tuple):
             attack_reward, defense_reward = reward
-            # Focus on attack reward for training
-            return float(attack_reward)
+            return float(defense_reward)
         return float(reward)
+    
+    def get_defense_rate(self) -> float:
+        """
+        Get the current success rate of defensive actions.
+        
+        Returns:
+            Float between 0 and 1 representing defense success rate
+        """
+        if self.total_attacks == 0:
+            return 0.0
+        return self.successful_defenses / self.total_attacks
     
     def get_state_size(self) -> Tuple[int, ...]:
         """
