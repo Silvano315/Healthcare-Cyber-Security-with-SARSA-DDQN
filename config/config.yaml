@@ -1,8 +1,10 @@
 environment:
   name: "idsgame-random-attack-v20"
+  entry_point: "IdsGameRandomAttackV20Env"
   parameters:
     render: false  
     seed: 42      
+    custom_attack: false  # If false use the environment attack, if true use random attack
 
 sarsa:
   # Learning parameters
