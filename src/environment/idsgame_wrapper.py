@@ -1,172 +1,189 @@
-import gymnasium as gym
+from typing import Dict, Any, List, Tuple
 import numpy as np
-from typing import Tuple, Dict, Any, Optional
-from gymnasium import spaces
+from gym_idsgame.envs.idsgame_env import IdsGameRandomAttackV21Env
+from gym_idsgame.envs.dao.game_config import GameConfig
+from gym_idsgame.envs.dao.idsgame_config import IdsGameConfig
 
-
-class IdsGameWrapper:
+class IDSEnvironment(IdsGameRandomAttackV21Env):
     """
-    A wrapper for the IdsGame environment that standardizes the interface
-    and handles preprocessing of states and rewards from a defensive perspective.
+    Extended environment for IDS analysis and training.
+    Inherits from the most advanced random attack environment (v21) which includes:
+    - 1 layer, 2 servers per layer
+    - Dense rewards v3
+    - Reconnaissance actions enabled
+    - Partial observations
+    - Random attacker starting position
+    - Random environment
     """
     
-    def __init__(self, env_name: str, env_point: str, config: Dict[str, Any]):
+    def __init__(self, save_dir: str = None, initial_state_path: str = None):
         """
-        Initialize the wrapper with specific environment configuration.
+        Initialize the v21 environment with default settings
+        """
+        super().__init__(idsgame_config=None, save_dir=save_dir, initial_state_path=initial_state_path)
+        
+    def analyze_state(self) -> Dict[str, Any]:
+        """
+        Analyze current state of the environment
+        """
+        return {
+            "attack_values": self.state.attack_values.copy(),
+            "defense_values": self.state.defense_values.copy(),
+            "detection_values": self.state.defense_det.copy(),
+            "reconnaissance_state": self.state.reconnaissance_state.copy(),
+            "attacker_pos": self.state.attacker_pos,
+            "game_step": self.state.game_step,
+            "done": self.state.done,
+            "detected": self.state.detected,
+            "hacked": self.state.hacked,
+            "reconnaissance_actions": self.state.reconnaissance_actions
+        }
+    
+    def analyze_attack_defense_stats(self) -> Dict[str, Any]:
+        """
+        Analyze attack and defense statistics
+        """
+        return {
+            "num_attacks": len(self.attacks),
+            "num_failed_attacks": self.num_failed_attacks,
+            "num_defenses": len(self.defenses),
+            "num_detections": len(self.attack_detections),
+            "hack_probability": self.hack_probability(),
+            "attack_types": [attack[1] for attack in self.attacks],
+            "defense_types": [defense[1] for defense in self.defenses],
+            "reconnaissance_activities": len(self.state.reconnaissance_actions)
+        }
+
+    def run_episode(self, random_defense: bool = True) -> Dict[str, List[float]]:
+        """
+        Run a complete episode with optional random defense
         
         Args:
-            env_name: Name of the IdsGame environment
-            env_point: Name of the entry point of the IdsGame environment
-            config: Configuration dictionary from config.yaml
+            random_defense: If True, use random defense actions
+            
+        Returns:
+            Dictionary with episode statistics
         """
-        gym.register(
-                id=env_name,
-                entry_point='gym_idsgame.envs:' + env_point,
-                kwargs={"idsgame_config": None, "save_dir": None, "initial_state_path": None}
-            )
-        
-        self.env = gym.make(env_name)
-        self.config = config
-        
-        self.observation_space = self.env.observation_space
-        self.action_space = self.env.action_space
-        
-        self.env_parameters = {
-            'num_nodes': self.env.idsgame_config.game_config.num_nodes,
-            'num_attack_types': self.env.idsgame_config.game_config.num_attack_types,
-            'max_value': self.env.idsgame_config.game_config.max_value
+        obs, _ = self.reset()
+        done = False
+        episode_data = {
+            "rewards": [],
+            "attack_success": [],
+            "detection_rate": [],
+            "defense_effectiveness": [],
+            "reconnaissance_rate": []
         }
         
-        self.episode_rewards = []
-        self.current_episode_reward = 0.0
-        self.successful_defenses = 0
-        self.total_attacks = 0
-    
-    def reset(self, seed: Optional[int] = None) -> Tuple[np.ndarray, Dict]:
-        """Reset the environment and return processed initial state."""
-        observation, info = self.env.reset(seed=seed)
-        return self.preprocess_state(observation), info
-    
-    def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, bool, Dict]:
-        """
-        Take a step in the environment with preprocessing of state and reward.
-        Focus on defensive performance.
-        
-        Args:
-            action: Defense action to take
+        while not done:
+            if random_defense:
+                defense_action = self.defender_action_space.sample()
+            else:
+                # Use minimal defense strategy
+                defense_action = 0
+                min_defense = float('inf')
+                for d in range(self.num_defense_actions):
+                    if self.is_defense_legal(d):
+                        defense_val = self.state.defense_values.min()
+                        if defense_val < min_defense:
+                            min_defense = defense_val
+                            defense_action = d
+                            
+            action = (-1, defense_action)  # -1 triggers random attack from attacker agent
+            obs, reward, done, _, info = self.step(action)
             
-        Returns:
-            Tuple of (next_state, reward, terminated, truncated, info)
-        """
-        next_state, reward, terminated, truncated, info = self.env.step(action)
-        processed_state = self.preprocess_state(next_state)
-        processed_reward = self.process_reward(reward)
-        
-        self.current_episode_reward += processed_reward
-        self.total_attacks += 1
-        if processed_reward > 0:  
-            self.successful_defenses += 1
-        
-        if terminated or truncated:
-            self.episode_rewards.append(self.current_episode_reward)
-            defense_rate = self.successful_defenses / self.total_attacks if self.total_attacks > 0 else 0
-            info['defense_success_rate'] = defense_rate
+            # Calculate statistics
+            episode_data["rewards"].append(reward[0])  # Attacker reward
+            episode_data["attack_success"].append(1 if len(self.attacks) > 0 and 
+                                                self.attacks[-1] not in self.failed_attacks else 0)
+            episode_data["detection_rate"].append(len(self.attack_detections) / 
+                                                max(1, len(self.attacks)))
+            episode_data["defense_effectiveness"].append(self.num_failed_attacks / 
+                                                       max(1, len(self.attacks)))
+            episode_data["reconnaissance_rate"].append(len(self.state.reconnaissance_actions) /
+                                                     max(1, len(self.attacks)))
             
-            # Reset episode-specific counters
-            self.current_episode_reward = 0.0
-            self.successful_defenses = 0
-            self.total_attacks = 0
+        return episode_data
+    
+    def get_observation_info(self) -> Dict[str, Any]:
+        """
+        Get detailed information about the observation space
+        """
+        attacker_obs, defender_obs = self.get_observation()
+        
+        return {
+            "attacker_observation": {
+                "shape": attacker_obs.shape,
+                "range": (float(attacker_obs.min()), float(attacker_obs.max())),
+                "reconnaissance_enabled": True,  # v21 always has reconnaissance
+                "local_view": False  # v21 uses global view
+            },
+            "defender_observation": {
+                "shape": defender_obs.shape,
+                "range": (float(defender_obs.min()), float(defender_obs.max())),
+                "fully_observed": self.fully_observed()
+            },
+            "network_config": {
+                "num_layers": self.idsgame_config.game_config.num_layers,
+                "num_servers_per_layer": self.idsgame_config.game_config.num_servers_per_layer,
+                "num_attack_types": self.idsgame_config.game_config.num_attack_types,
+                "max_value": self.idsgame_config.game_config.max_value
+            }
+        }
+    
+    def comprehensive_analysis(self) -> None:
+        """
+        Comprehensive analysis of the environment printing all available information
+        """
+
+        print("\n=== Environment Configuration ===")
+        obs_info = self.get_observation_info()
+        print("\nNetwork Configuration:")
+        for k, v in obs_info["network_config"].items():
+            print(f"- {k}: {v}")
             
-        return processed_state, processed_reward, terminated, truncated, info
-    
-    def preprocess_state(self, state: np.ndarray) -> np.ndarray:
-        """
-        Preprocess the state observation.
-        
-        Args:
-            state: Raw state from environment
+        print("\nObservation Spaces:")
+        print("\nAttacker Observation:")
+        for k, v in obs_info["attacker_observation"].items():
+            print(f"- {k}: {v}")
+        print("\nDefender Observation:")
+        for k, v in obs_info["defender_observation"].items():
+            print(f"- {k}: {v}")
             
-        Returns:
-            Processed state
-        """
-        if isinstance(state, tuple):
-            defense_state, attack_state = state
-            # normalization with max_value
-            processed_defense = defense_state / self.env_parameters['max_value']
-            processed_attack = attack_state / self.env_parameters['max_value']
-            return (processed_defense, processed_attack)
-        else:
-            return state / self.env_parameters['max_value']
-    
-    def process_reward(self, reward: float) -> float:
-        """
-        Process the reward signal focusing on defensive performance.
+        print("\n=== Test Episode Analysis ===")
+        episode_data = self.run_episode()
         
-        Args:
-            reward: Raw reward from environment (attack_reward, defense_reward)
-            
-        Returns:
-            Processed defense reward
-        """
-        if isinstance(reward, tuple):
-            attack_reward, defense_reward = reward
-            return float(defense_reward)
-        return float(reward)
-    
-    def get_defense_rate(self) -> float:
-        """
-        Get the current success rate of defensive actions.
+        print("\nEpisode Statistics:")
+        print(f"- Total Steps: {len(episode_data['rewards'])}")
+        print(f"- Average Reward: {np.mean(episode_data['rewards']):.2f}")
+        print(f"- Attack Success Rate: {np.mean(episode_data['attack_success']):.2%}")
+        print(f"- Detection Rate: {np.mean(episode_data['detection_rate']):.2%}")
+        print(f"- Defense Effectiveness: {np.mean(episode_data['defense_effectiveness']):.2%}")
+        print(f"- Reconnaissance Rate: {np.mean(episode_data['reconnaissance_rate']):.2%}")
         
-        Returns:
-            Float between 0 and 1 representing defense success rate
-        """
-        if self.total_attacks == 0:
-            return 0.0
-        return self.successful_defenses / self.total_attacks
-    
-    def get_state_size(self) -> Tuple[int, ...]:
-        """
-        Get the size of the state space.
+        state_info = self.analyze_state()
+        print("\nCurrent State Information:")
+        print(f"- Attacker Position: {state_info['attacker_pos']}")
+        print(f"- Game Step: {state_info['game_step']}")
+        print(f"- Episode Done: {state_info['done']}")
+        print(f"- Attacker Detected: {state_info['detected']}")
+        print(f"- Target Hacked: {state_info['hacked']}")
+        print(f"- Reconnaissance Actions: {len(state_info['reconnaissance_actions'])}")
         
-        Returns:
-            Tuple representing state dimensions
-        """
-        if isinstance(self.observation_space, tuple):
-            return (self.observation_space[0].shape[0], self.observation_space[1].shape[0])
-        return self.observation_space.shape
-    
-    def get_action_size(self) -> int:
-        """
-        Get the size of the action space.
+        stats = self.analyze_attack_defense_stats()
+        print("\nAttack-Defense Statistics:")
+        print(f"- Total Attacks: {stats['num_attacks']}")
+        print(f"- Failed Attacks: {stats['num_failed_attacks']}")
+        print(f"- Total Defenses: {stats['num_defenses']}")
+        print(f"- Attack Detections: {stats['num_detections']}")
+        print(f"- Hack Probability: {stats['hack_probability']:.2%}")
         
-        Returns:
-            Number of possible actions
-        """
-        return self.action_space.n if isinstance(self.action_space, spaces.Discrete) else self.action_space.shape[0]
-    
-    def get_environment_parameters(self) -> Dict[str, int]:
-        """
-        Get the environment parameters.
+        print("\nAction Spaces:")
+        print(f"- Defender Actions: {self.num_defense_actions}")
+        print(f"- Attack Actions: {self.num_attack_actions}")
         
-        Returns:
-            Dictionary containing environment parameters
-        """
-        return self.env_parameters
-    
-    def get_episode_rewards(self) -> list:
-        """
-        Get the list of episode rewards.
-        
-        Returns:
-            List of rewards for each completed episode
-        """
-        return self.episode_rewards
-    
-    def render(self):
-        """Render the environment if configured"""
-        if self.config['environment']['parameters']['render']:
-            return self.env.render()
-    
-    def close(self):
-        """Close the environment"""
-        self.env.close()
+        print("\nEnvironment Properties:")
+        print(f"- Dense Rewards: {self.idsgame_config.game_config.dense_rewards}")
+        print(f"- Reconnaissance Enabled: {self.idsgame_config.reconnaissance_actions}")
+        print(f"- Random Starting Position: {self.idsgame_config.randomize_starting_position}")
+        print(f"- Random Environment: {self.idsgame_config.randomize_env}")
+        print(f"- Local View Observations: {self.idsgame_config.local_view_observations}")
