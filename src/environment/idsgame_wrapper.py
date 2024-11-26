@@ -68,6 +68,7 @@ class IDSEnvironment(IdsGameRandomAttackV21Env):
         done = False
         episode_data = {
             "rewards": [],
+            #"def_rewards": [],
             "attack_success": [],
             "detection_rate": [],
             "defense_effectiveness": [],
@@ -78,7 +79,7 @@ class IDSEnvironment(IdsGameRandomAttackV21Env):
             if random_defense:
                 defense_action = self.defender_action_space.sample()
             else:
-                # Use minimal defense strategy
+                # Minimal Defense Strategy
                 defense_action = 0
                 min_defense = float('inf')
                 for d in range(self.num_defense_actions):
@@ -91,8 +92,8 @@ class IDSEnvironment(IdsGameRandomAttackV21Env):
             action = (-1, defense_action)  # -1 triggers random attack from attacker agent
             obs, reward, done, _, info = self.step(action)
             
-            # Calculate statistics
             episode_data["rewards"].append(reward[0])  # Attacker reward
+            #episode_data["def_rewards"].append(reward[1])  # Defender reward
             episode_data["attack_success"].append(1 if len(self.attacks) > 0 and 
                                                 self.attacks[-1] not in self.failed_attacks else 0)
             episode_data["detection_rate"].append(len(self.attack_detections) / 
@@ -155,6 +156,7 @@ class IDSEnvironment(IdsGameRandomAttackV21Env):
         print("\nEpisode Statistics:")
         print(f"- Total Steps: {len(episode_data['rewards'])}")
         print(f"- Average Reward: {np.mean(episode_data['rewards']):.2f}")
+        #print(f"- Average Defender Reward: {np.mean(episode_data['def_rewards']):.2f}")
         print(f"- Attack Success Rate: {np.mean(episode_data['attack_success']):.2%}")
         print(f"- Detection Rate: {np.mean(episode_data['detection_rate']):.2%}")
         print(f"- Defense Effectiveness: {np.mean(episode_data['defense_effectiveness']):.2%}")
