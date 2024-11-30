@@ -246,7 +246,7 @@ class DDQNAgent(QAgent):
         else:
             target = self.defender_q_network(s_1)
 
-        # DDQN Update (Key Difference from DQN)
+        # DDQN Update !!!! Here you can find the most important difference with DQN agent
         with torch.no_grad():
             if attacker:
                 # Select actions using online network
@@ -362,6 +362,12 @@ class DDQNAgent(QAgent):
         episode_steps = []
         episode_avg_attacker_loss = []
         episode_avg_defender_loss = []
+
+        # Logging
+        self.outer_train = tqdm.tqdm(total=self.config.num_episodes, desc='Train Episode', position=0)
+        self.outer_train.set_description_str("[Train] epsilon:{:.2f},avg_a_R:{:.2f},avg_d_R:{:.2f},"
+                                             "avg_t:{:.2f},avg_h:{:.2f},acc_A_R:{:.2f}," \
+                                             "acc_D_R:{:.2f}".format(self.config.epsilon, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
 
         # Main training loop
         for episode in range(self.config.num_episodes):
