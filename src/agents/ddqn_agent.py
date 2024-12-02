@@ -481,6 +481,10 @@ class DDQNAgent(QAgent):
             # Save models
             if episode % self.config.checkpoint_freq == 0:
                 self.save_model()
+                if self.config.save_dir is not None:
+                    time_str = str(time.time())
+                    self.train_result.to_csv(self.config.save_dir + "/" + time_str + "_train_results_checkpoint.csv")
+                    self.eval_result.to_csv(self.config.save_dir + "/" + time_str + "_eval_results_checkpoint.csv")
 
             # Reset for next episode
             done = False
@@ -501,6 +505,11 @@ class DDQNAgent(QAgent):
         
         # Save final model and data
         self.save_model()
+
+        if self.config.save_dir is not None:
+            time_str = str(time.time())
+            self.train_result.to_csv(self.config.save_dir + "/" + time_str + "_train_results_checkpoint.csv")
+            self.eval_result.to_csv(self.config.save_dir + "/" + time_str + "_eval_results_checkpoint.csv")
         
         return self.train_result
 
