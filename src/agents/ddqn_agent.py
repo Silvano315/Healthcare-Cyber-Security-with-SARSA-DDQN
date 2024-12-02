@@ -90,6 +90,8 @@ class DDQNAgent(QAgent):
             # Add transition to replay memory
             self.buffer.add_tuple(obs, action, reward, done, obs_prime)
 
+            #print(f"In warmup after add tuple: {obs, action, reward, done, obs_prime}")
+
             # Move to new state
             obs = obs_prime
             outer_warmup.update(1)
@@ -305,6 +307,9 @@ class DDQNAgent(QAgent):
         :param attacker: whether getting action for attacker or defender
         :return: The selected action
         """
+        if not attacker and (not isinstance(state, np.ndarray) or state.dtype == object):
+            state = self.env.state.get_defender_observation(
+                self.env.idsgame_config.game_config.network_config)
         state = torch.from_numpy(state.flatten()).float()
 
         # Move to GPU if available
@@ -706,6 +711,14 @@ class DDQNAgent(QAgent):
             if self.env.idsgame_config.reconnaissance_bool_features:
                 d_bool_features = attacker_obs[:, a_obs_len+self.env.idsgame_config.game_config.num_attack_types:]
             attacker_obs = attacker_obs[:, 0:a_obs_len]
+
+        """if not attacker and self.env.local_view_features():
+            attacker_obs = self.env.state.get_attacker_observation(
+                self.env.idsgame_config.game_config.network_config,
+                local_view=False,
+                reconnaissance=self.env.idsgame_config.reconnaissance_actions)
+            defender_obs = self.env.state.get_defender_observation(
+                self.env.idsgame_config.game_config.network_config)"""
 
         if not attacker and self.env.local_view_features():
             attacker_obs = self.env.state.get_attacker_observation(
