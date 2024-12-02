@@ -1,4 +1,4 @@
-from .base_agent import BaseAgent
-from .sarsa_agent import SarsaAgent
+from .sarsa_agent import SARSAAgent
+from .ddqn_agent import DDQNAgent
 
-__all__ = ['BaseAgent', 'SarsaAgent']
+__all__ = ['SARSAAgent', 'DDQNAgent']
