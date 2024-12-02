@@ -21,12 +21,13 @@ class GymCompatibilityWrapper(gym.Wrapper):
         
         Args:
             **kwargs: Keyword arguments for reset, including update_stats
-            
+                
         Returns:
-            tuple: Initial observation from the environment
+            tuple: (attacker_obs, defender_obs)
         """
         update_stats = kwargs.get('update_stats', False)
-        return self.env.reset(update_stats=update_stats)
+        self.env.reset(update_stats=update_stats)
+        return self.env.get_observation()
 
     # TO BE REFACTORED (if you want to see gifs or video)
     def render(self, *args, **kwargs) -> Union[None, np.ndarray]:
