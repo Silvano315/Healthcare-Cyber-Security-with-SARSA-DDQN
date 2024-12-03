@@ -3,10 +3,14 @@ import numpy as np
 from datetime import datetime
 from gym_idsgame.agents.dao.experiment_result import ExperimentResult
 
-def get_output_dir() -> str:
-    """Create and get output directory"""
+def get_output_dir(algorithm: str) -> str:
+    """Create and get output directory
+
+        Args:
+        algorithm: Name of the algorithm used (e.g., "sarsa", "ddqn")
+    """
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    output_dir = f"results/training/sarsa_{timestamp}"
+    output_dir = f"results/training/{algorithm}_{timestamp}"
     os.makedirs(output_dir, exist_ok=True)
     return output_dir
 

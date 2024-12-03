@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.image import imread
 
 
-def plot_results(output_dir: str, random_seed: int, algorithm: str) -> None:
+def plot_results(output_dir: str, random_seed: int, algorithm: str, mode: str) -> None:
     """
     Create a comparison figure showing training and evaluation results from saved plots.
 
@@ -14,7 +14,8 @@ def plot_results(output_dir: str, random_seed: int, algorithm: str) -> None:
     Args:
         output_dir: Base directory containing the results
         random_seed: Random seed used for the experiment
-        algorithm: Name of the algorithm used (e.g., "SARSA", "DQN")
+        algorithm: Name of the algorithm used (e.g., "SARSA", "DDQN")
+        mode: name of the env mode (e.g., 'random', 'maximal')
         
     Training plots:
         - defender_cumulative_reward_train.png
@@ -44,7 +45,7 @@ def plot_results(output_dir: str, random_seed: int, algorithm: str) -> None:
         name.replace("_train", "_eval") for name in training_plots
     ]
     
-    figure_title = algorithm + " Results with Random Attack"
+    figure_title = algorithm + f" Results with {mode.capitalize()} Attack"
     left_column_title = "Training Results"
     right_column_title = "Evaluation Results"
     fig, axes = plt.subplots(nrows=7, ncols=2, figsize=(14, 28))
